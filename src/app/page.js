@@ -1,47 +1,54 @@
 "use client";
 import { useState, useCallback, useEffect, useMemo } from "react";
 
-const EXAMPLE = `A->B, A->C, B->D, C->E, E->F, X->Y, Y->Z, Z->X, P->Q, Q->R, G->H, G->H, G->I, hello, 1->2, A->`;
+/* ── Presets ──────────────────────────────────── */
+const PRESETS = {
+  mixed: { label: "🔀 Mixed", data: "A->B, A->C, B->D, C->E, E->F, X->Y, Y->Z, Z->X, P->Q, Q->R, G->H, G->H, G->I, hello, 1->2, A->" },
+  trees: { label: "🌲 Trees Only", data: "A->B, A->C, B->D, C->E, P->Q, Q->R, G->H, G->I" },
+  cycles: { label: "🔁 Cycles Only", data: "X->Y, Y->Z, Z->X, M->N, N->O, O->M" },
+  edge: { label: "⚡ Edge Cases", data: "hello, 1->2, A->, AB->C, A-B, A->A, , A->B,  A->B " },
+};
 
-/* ── Helpers ─────────────────────────────────── */
-
-function validateInputLive(text) {
+/* ── Helpers ──────────────────────────────────── */
+function validateLive(text) {
   if (!text.trim()) return null;
   const entries = text.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
   const pat = /^[A-Z]->[A-Z]$/;
   const seen = new Set();
   let valid = 0, invalid = 0, dupes = 0;
   for (const e of entries) {
-    if (!pat.test(e) || e[0] === e[3]) { invalid++; }
-    else if (seen.has(e)) { dupes++; }
+    if (!pat.test(e) || e[0] === e[3]) invalid++;
+    else if (seen.has(e)) dupes++;
     else { seen.add(e); valid++; }
   }
-  return { total: entries.length, valid, invalid, dupes };
+  return { total: entries.length, valid, invalid, dupes, edges: seen.size };
+}
+
+function buildRequestJson(text) {
+  if (!text.trim()) return null;
+  return { data: text.split(/[,\n]+/).map(s => s.trim()).filter(Boolean) };
 }
 
 /* ── Graph Layout ────────────────────────────── */
-
 function computeTreeGraph(treeObj) {
   const nodes = [], edges = [];
   let leafIdx = 0;
   const spacing = 70, levelH = 80, pad = 40;
-
-  function process(nodeId, children, depth, parentId) {
+  function process(id, children, depth, parentId) {
     const ck = Object.keys(children);
     if (ck.length === 0) {
       const x = pad + (leafIdx + 0.5) * spacing;
-      nodes.push({ id: nodeId, x, y: pad + depth * levelH, depth });
+      nodes.push({ id, x, y: pad + depth * levelH, depth });
       leafIdx++;
-      if (parentId) edges.push({ from: parentId, to: nodeId });
+      if (parentId) edges.push({ from: parentId, to: id });
       return x;
     }
-    const cxs = ck.map(c => process(c, children[c], depth + 1, nodeId));
+    const cxs = ck.map(c => process(c, children[c], depth + 1, id));
     const x = cxs.reduce((a, b) => a + b, 0) / cxs.length;
-    nodes.push({ id: nodeId, x, y: pad + depth * levelH, depth });
-    if (parentId) edges.push({ from: parentId, to: nodeId });
+    nodes.push({ id, x, y: pad + depth * levelH, depth });
+    if (parentId) edges.push({ from: parentId, to: id });
     return x;
   }
-
   const root = Object.keys(treeObj)[0];
   if (!root) return null;
   process(root, treeObj[root], 0, null);
@@ -50,43 +57,52 @@ function computeTreeGraph(treeObj) {
   return { nodes, edges, w: mx + pad, h: my + pad };
 }
 
+function computeCycleGraph(cycleNodes) {
+  if (!cycleNodes || cycleNodes.length === 0) return null;
+  const nodes = [], edges = [];
+  const cx = 120, cy = 100, r = Math.min(60, cycleNodes.length * 20);
+  cycleNodes.forEach((id, i) => {
+    const angle = (2 * Math.PI * i / cycleNodes.length) - Math.PI / 2;
+    nodes.push({ id, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
+    edges.push({ from: id, to: cycleNodes[(i + 1) % cycleNodes.length] });
+  });
+  return { nodes, edges, w: cx * 2, h: cy * 2 };
+}
+
 /* ── Components ──────────────────────────────── */
-
 function GraphViz({ hierarchy }) {
-  if (hierarchy.has_cycle) {
-    return (
-      <div className="cycle-indicator">
-        <span className="cycle-icon">⟳</span>
-        Cycle detected — no tree structure available
-      </div>
-    );
-  }
-  const g = computeTreeGraph(hierarchy.tree);
-  if (!g) return null;
+  const g = hierarchy.has_cycle
+    ? computeCycleGraph(hierarchy.cycle_nodes)
+    : computeTreeGraph(hierarchy.tree);
+  if (!g) return <div className="cycle-indicator"><span className="cycle-icon">⟳</span>Cycle detected</div>;
   const { nodes, edges, w, h } = g;
-
+  const markerId = hierarchy.has_cycle ? "arrow-cycle" : "arrow-tree";
+  const strokeColor = hierarchy.has_cycle ? "var(--error)" : "var(--text-muted)";
   return (
     <div className="graph-container">
       <svg width={Math.max(w, 160)} height={Math.max(h, 100)} viewBox={`0 0 ${Math.max(w, 160)} ${Math.max(h, 100)}`}>
         <defs>
-          <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-            <path d="M0,0 L8,3 L0,6" fill="var(--text-muted)" opacity="0.6" />
+          <marker id={markerId} markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill={strokeColor} opacity="0.6" />
           </marker>
         </defs>
         {edges.map((e, i) => {
           const f = nodes.find(n => n.id === e.from);
           const t = nodes.find(n => n.id === e.to);
+          const dx = t.x - f.x, dy = t.y - f.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
           return (
             <line key={i} className="graph-edge"
-              x1={f.x} y1={f.y + 18} x2={t.x} y2={t.y - 18}
-              markerEnd="url(#arrowhead)"
-              style={{ animationDelay: `${0.2 + i * 0.08}s` }}
-            />
+              x1={f.x + (dx / dist) * 18} y1={f.y + (dy / dist) * 18}
+              x2={t.x - (dx / dist) * 18} y2={t.y - (dy / dist) * 18}
+              stroke={strokeColor} markerEnd={`url(#${markerId})`}
+              style={{ animationDelay: `${0.2 + i * 0.08}s` }} />
           );
         })}
         {nodes.map((n, i) => (
-          <g key={n.id} style={{ animationDelay: `${i * 0.1}s` }}>
+          <g key={n.id}>
             <circle className="graph-node-circle" cx={n.x} cy={n.y} r={18}
+              stroke={hierarchy.has_cycle ? "var(--error)" : "var(--accent-light)"}
               style={{ animationDelay: `${i * 0.1}s` }} />
             <text className="graph-node-text" x={n.x} y={n.y}
               style={{ animationDelay: `${i * 0.1}s` }}>{n.id}</text>
@@ -99,23 +115,21 @@ function GraphViz({ hierarchy }) {
 
 function TreeText({ tree }) {
   const lines = useMemo(() => {
-    const result = [];
+    const res = [];
     const root = Object.keys(tree)[0];
-    if (!root) return result;
-    result.push({ pre: "", node: root });
+    if (!root) return res;
+    res.push({ pre: "", node: root });
     function walk(obj, prefix) {
       const keys = Object.keys(obj);
       keys.forEach((k, i) => {
         const last = i === keys.length - 1;
-        result.push({ pre: prefix + (last ? "└── " : "├── "), node: k });
-        if (Object.keys(obj[k]).length > 0)
-          walk(obj[k], prefix + (last ? "    " : "│   "));
+        res.push({ pre: prefix + (last ? "└── " : "├── "), node: k });
+        if (Object.keys(obj[k]).length > 0) walk(obj[k], prefix + (last ? "    " : "│   "));
       });
     }
     walk(tree[root], "");
-    return result;
+    return res;
   }, [tree]);
-
   return (
     <div className="tree-viz">
       {lines.map((l, i) => (
@@ -126,101 +140,91 @@ function TreeText({ tree }) {
 }
 
 function AnimatedNum({ value }) {
-  const [display, setDisplay] = useState(0);
+  const [d, setD] = useState(0);
   useEffect(() => {
-    let raf;
-    const start = performance.now();
-    const animate = (now) => {
-      const p = Math.min((now - start) / 500, 1);
-      setDisplay(Math.round(value * p));
-      if (p < 1) raf = requestAnimationFrame(animate);
+    let raf; const t0 = performance.now();
+    const anim = (now) => {
+      const p = Math.min((now - t0) / 500, 1);
+      setD(Math.round(value * p));
+      if (p < 1) raf = requestAnimationFrame(anim);
     };
-    raf = requestAnimationFrame(animate);
+    raf = requestAnimationFrame(anim);
     return () => cancelAnimationFrame(raf);
   }, [value]);
-  return display;
+  return d;
 }
 
 /* ── Main ────────────────────────────────────── */
-
 export default function Home() {
   const [input, setInput] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showJson, setShowJson] = useState(false);
   const [copied, setCopied] = useState(false);
   const [responseTime, setResponseTime] = useState(null);
-  const [vizMode, setVizMode] = useState("graph"); // "graph" | "text"
+  const [vizMode, setVizMode] = useState("graph");
   const [theme, setTheme] = useState("dark");
+  const [activeTab, setActiveTab] = useState("hierarchies");
+  const [showPreview, setShowPreview] = useState(false);
 
-  // Theme persistence
   useEffect(() => {
-    const saved = localStorage.getItem("bfhl-theme");
-    if (saved) { setTheme(saved); document.documentElement.setAttribute("data-theme", saved); }
+    const s = localStorage.getItem("bfhl-theme");
+    if (s) { setTheme(s); document.documentElement.setAttribute("data-theme", s); }
   }, []);
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
+    setTheme(next); document.documentElement.setAttribute("data-theme", next);
     localStorage.setItem("bfhl-theme", next);
   };
 
-  // Keyboard shortcut: Ctrl+Enter to submit
   useEffect(() => {
-    const handler = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); handleSubmit(); }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    const h = (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); handleSubmit(); } };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
   });
 
-  const validation = useMemo(() => validateInputLive(input), [input]);
+  const validation = useMemo(() => validateLive(input), [input]);
+  const requestPreview = useMemo(() => buildRequestJson(input), [input]);
 
   const handleSubmit = useCallback(async () => {
-    setError(""); setResult(null); setShowJson(false); setResponseTime(null);
+    setError(""); setResult(null); setResponseTime(null); setActiveTab("hierarchies");
     const trimmed = input.trim();
     if (!trimmed) { setError("Please enter at least one node relationship."); return; }
     const data = trimmed.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
     setLoading(true);
     const t0 = performance.now();
     try {
-      const res = await fetch("/api/bfhl", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data }),
-      });
+      const res = await fetch("/api/bfhl", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
       setResponseTime(Math.round(performance.now() - t0));
-      if (!res.ok) {
-        const b = await res.json().catch(() => ({}));
-        throw new Error(b.error || `Server responded with ${res.status}`);
-      }
+      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || `Status ${res.status}`); }
       setResult(await res.json());
     } catch (err) {
       setResponseTime(Math.round(performance.now() - t0));
-      setError(err.message || "Failed to connect to the API.");
+      setError(err.message || "Failed to connect.");
     } finally { setLoading(false); }
   }, [input]);
 
-  const copyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(result, null, 2));
-    setCopied(true); setTimeout(() => setCopied(false), 2000);
+  const copyJson = () => { navigator.clipboard.writeText(JSON.stringify(result, null, 2)); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  const downloadJson = () => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: "application/json" }));
+    a.download = "bfhl-result.json"; a.click();
   };
 
-  const downloadJson = () => {
-    const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "bfhl-result.json"; a.click();
-    URL.revokeObjectURL(url);
-  };
+  const loadPreset = (key) => { setInput(PRESETS[key].data); setResult(null); setError(""); };
+
+  const TABS = [
+    { id: "hierarchies", label: "🌲 Hierarchies", count: result?.hierarchies?.length },
+    { id: "invalid", label: "❌ Invalid", count: result?.invalid_entries?.length },
+    { id: "duplicates", label: "🔁 Duplicates", count: result?.duplicate_edges?.length },
+    { id: "json", label: "{ } JSON" },
+  ];
 
   return (
     <>
       <div className="topbar">
-        <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme" id="theme-toggle">
-          {theme === "dark" ? "☀️" : "🌙"}
-        </button>
+        <button className="theme-toggle" onClick={toggleTheme} id="theme-toggle">{theme === "dark" ? "☀️" : "🌙"}</button>
       </div>
 
       <header className="hero">
@@ -244,6 +248,7 @@ export default function Home() {
               <span className="vb-item"><span className="vb-dot green" />{validation.valid} valid</span>
               <span className="vb-item"><span className="vb-dot red" />{validation.invalid} invalid</span>
               <span className="vb-item"><span className="vb-dot yellow" />{validation.dupes} dupes</span>
+              <span className="vb-item"><span className="vb-dot" style={{ background: "var(--accent-light)" }} />{validation.edges} unique edges</span>
             </div>
           )}
 
@@ -251,11 +256,21 @@ export default function Home() {
             <button id="submit-btn" className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
               {loading ? <><span className="spinner" /> Processing…</> : <>🔍 Analyze</>}
             </button>
-            <button id="example-btn" className="btn btn-secondary"
-              onClick={() => { setInput(EXAMPLE); setResult(null); setError(""); }}>
-              📋 Load Example
-            </button>
+            {Object.entries(PRESETS).map(([key, p]) => (
+              <button key={key} className="btn btn-secondary btn-sm" onClick={() => loadPreset(key)}>{p.label}</button>
+            ))}
           </div>
+
+          {input.trim() && (
+            <div style={{ marginTop: 12 }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowPreview(!showPreview)}>
+                {showPreview ? "▾ Hide" : "▸ Show"} Request Preview
+              </button>
+              {showPreview && requestPreview && (
+                <pre className="json-block" style={{ marginTop: 8, maxHeight: 160 }}>{JSON.stringify(requestPreview, null, 2)}</pre>
+              )}
+            </div>
+          )}
 
           {error && <div className="error-banner" id="error-message">⚠️ {error}</div>}
         </section>
@@ -291,68 +306,78 @@ export default function Home() {
               </div>
             </div>
 
-            <h3 className="hierarchies-title">🌲 Hierarchies ({result.hierarchies.length})</h3>
+            {/* Tabs */}
+            <div className="tabs">
+              {TABS.map(t => (
+                <button key={t.id} className={`tab ${activeTab === t.id ? "active" : ""}`} onClick={() => setActiveTab(t.id)}>
+                  {t.label}{t.count !== undefined && <span className="tab-count">{t.count}</span>}
+                </button>
+              ))}
+            </div>
 
-            {!result.hierarchies[0]?.has_cycle && (
-              <div className="viz-toggle">
-                <button className={vizMode === "graph" ? "active" : ""} onClick={() => setVizMode("graph")}>◉ Graph</button>
-                <button className={vizMode === "text" ? "active" : ""} onClick={() => setVizMode("text")}>≡ Text</button>
+            {/* Tab: Hierarchies */}
+            {activeTab === "hierarchies" && (
+              <div className="tab-content">
+                <div className="viz-toggle">
+                  <button className={vizMode === "graph" ? "active" : ""} onClick={() => setVizMode("graph")}>◉ Graph</button>
+                  <button className={vizMode === "text" ? "active" : ""} onClick={() => setVizMode("text")}>≡ Text</button>
+                </div>
+                {result.hierarchies.map((h, i) => (
+                  <div className="hierarchy-card" key={i} id={`hierarchy-${i}`} style={{ animationDelay: `${i * 0.1}s` }}>
+                    <div className="hierarchy-header">
+                      <div className="root-label">
+                        <span className={`root-node ${h.has_cycle ? "cycle-root" : "tree-root"}`}>{h.root}</span>
+                        <span style={{ fontWeight: 600 }}>Root: {h.root}</span>
+                      </div>
+                      <div className="hierarchy-meta">
+                        {h.has_cycle
+                          ? <><span className="meta-badge cycle-badge">⟳ Cycle</span>
+                              {h.cycle_nodes && <span className="meta-badge cycle-badge" style={{ opacity: 0.7 }}>{h.cycle_nodes.join(" → ")} → {h.cycle_nodes[0]}</span>}</>
+                          : <><span className="meta-badge tree-badge">✓ Tree</span><span className="meta-badge depth-badge">Depth: {h.depth}</span></>
+                        }
+                      </div>
+                    </div>
+                    {vizMode === "graph"
+                      ? <GraphViz hierarchy={h} />
+                      : h.has_cycle
+                        ? <div className="cycle-indicator"><span className="cycle-icon">⟳</span>Cycle detected — {h.cycle_nodes?.join(" → ")} → {h.cycle_nodes?.[0]}</div>
+                        : Object.keys(h.tree).length > 0 && <TreeText tree={h.tree} />
+                    }
+                  </div>
+                ))}
               </div>
             )}
 
-            {result.hierarchies.map((h, i) => (
-              <div className="hierarchy-card" key={i} id={`hierarchy-${i}`} style={{ animationDelay: `${i * 0.1}s` }}>
-                <div className="hierarchy-header">
-                  <div className="root-label">
-                    <span className={`root-node ${h.has_cycle ? "cycle-root" : "tree-root"}`}>{h.root}</span>
-                    <span style={{ fontWeight: 600 }}>Root: {h.root}</span>
-                  </div>
-                  <div className="hierarchy-meta">
-                    {h.has_cycle
-                      ? <span className="meta-badge cycle-badge">⟳ Cycle</span>
-                      : <><span className="meta-badge tree-badge">✓ Tree</span><span className="meta-badge depth-badge">Depth: {h.depth}</span></>
-                    }
-                  </div>
-                </div>
-                {h.has_cycle ? (
-                  <GraphViz hierarchy={h} />
-                ) : vizMode === "graph" ? (
-                  <GraphViz hierarchy={h} />
-                ) : (
-                  Object.keys(h.tree).length > 0 && <TreeText tree={h.tree} />
-                )}
-              </div>
-            ))}
-
-            <div className="tags-section">
-              <h3>❌ Invalid Entries ({result.invalid_entries.length})</h3>
-              <div className="tags-wrap">
+            {/* Tab: Invalid */}
+            {activeTab === "invalid" && (
+              <div className="tab-content">
                 {result.invalid_entries.length === 0
-                  ? <span className="tag-none">No invalid entries</span>
-                  : result.invalid_entries.map((e, i) => <span className="tag tag-invalid" key={i}>{e || '""'}</span>)
+                  ? <div className="empty-state">✅ No invalid entries found</div>
+                  : <div className="tags-wrap">{result.invalid_entries.map((e, i) => <span className="tag tag-invalid" key={i}>{e || '""'}</span>)}</div>
                 }
               </div>
-            </div>
-            <div className="tags-section" style={{ marginTop: 16 }}>
-              <h3>🔁 Duplicate Edges ({result.duplicate_edges.length})</h3>
-              <div className="tags-wrap">
-                {result.duplicate_edges.length === 0
-                  ? <span className="tag-none">No duplicates</span>
-                  : result.duplicate_edges.map((e, i) => <span className="tag tag-duplicate" key={i}>{e}</span>)
-                }
-              </div>
-            </div>
+            )}
 
-            <div className="json-section">
-              <div className="json-bar">
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowJson(!showJson)}>
-                  {showJson ? "▾ Hide" : "▸ Show"} JSON
-                </button>
-                <button className="btn btn-secondary btn-sm" onClick={copyJson}>📋 Copy</button>
-                <button className="btn btn-secondary btn-sm" onClick={downloadJson}>⬇ Download</button>
+            {/* Tab: Duplicates */}
+            {activeTab === "duplicates" && (
+              <div className="tab-content">
+                {result.duplicate_edges.length === 0
+                  ? <div className="empty-state">✅ No duplicate edges found</div>
+                  : <div className="tags-wrap">{result.duplicate_edges.map((e, i) => <span className="tag tag-duplicate" key={i}>{e}</span>)}</div>
+                }
               </div>
-              {showJson && <pre className="json-block">{JSON.stringify(result, null, 2)}</pre>}
-            </div>
+            )}
+
+            {/* Tab: JSON */}
+            {activeTab === "json" && (
+              <div className="tab-content">
+                <div className="json-bar">
+                  <button className="btn btn-secondary btn-sm" onClick={copyJson}>📋 Copy</button>
+                  <button className="btn btn-secondary btn-sm" onClick={downloadJson}>⬇ Download</button>
+                </div>
+                <pre className="json-block">{JSON.stringify(result, null, 2)}</pre>
+              </div>
+            )}
           </section>
         )}
       </main>

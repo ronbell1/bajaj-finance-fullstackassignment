@@ -1,318 +1,217 @@
 import { NextResponse } from "next/server";
 
-// --- Configuration ---
-const USER_ID = "rohan_24042004"; // fullname_ddmmyyyy
+const USER_ID = "rohan_24042004";
 const EMAIL_ID = "rp2aborz@srmap.edu.in";
 const COLLEGE_ROLL_NUMBER = "AP22110011406";
 
-// --- Helpers ---
+/* ── Validation ──────────────────────────────── */
 
-/**
- * Validates a single entry against the X->Y format.
- * X and Y must each be a single uppercase letter A-Z.
- * Self-loops (A->A) are invalid.
- */
-function isValidEntry(entry) {
-  const trimmed = entry.trim();
-  const regex = /^([A-Z])->([A-Z])$/;
-  const match = trimmed.match(regex);
-  if (!match) return { valid: false, trimmed };
-  if (match[1] === match[2]) return { valid: false, trimmed }; // self-loop
-  return { valid: true, parent: match[1], child: match[2], trimmed };
+function isValidEdge(entry) {
+  const t = typeof entry === "string" ? entry.trim() : "";
+  if (!t) return { valid: false, trimmed: t };
+  const m = t.match(/^([A-Z])->([A-Z])$/);
+  if (!m || m[1] === m[2]) return { valid: false, trimmed: t };
+  return { valid: true, parent: m[1], child: m[2], trimmed: t };
 }
 
-/**
- * Detects cycles in a directed graph using DFS.
- * Returns true if any cycle is found within the component containing startNode.
- */
-function hasCycle(adjacency, nodes) {
-  const WHITE = 0,
-    GRAY = 1,
-    BLACK = 2;
-  const color = {};
-  for (const n of nodes) color[n] = WHITE;
+/* ── Iterative DFS Cycle Detection (optimized) ─ */
 
-  function dfs(u) {
-    color[u] = GRAY;
-    for (const v of adjacency[u] || []) {
-      if (color[v] === GRAY) return true;
-      if (color[v] === WHITE && dfs(v)) return true;
+function hasCycle(adj, nodes) {
+  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const color = new Map();
+  for (const n of nodes) color.set(n, WHITE);
+
+  for (const start of nodes) {
+    if (color.get(start) !== WHITE) continue;
+    const stack = [{ node: start, phase: "enter" }];
+    while (stack.length > 0) {
+      const { node, phase } = stack.pop();
+      if (phase === "exit") { color.set(node, BLACK); continue; }
+      if (color.get(node) === GRAY) { color.set(node, BLACK); continue; }
+      if (color.get(node) === BLACK) continue;
+      color.set(node, GRAY);
+      stack.push({ node, phase: "exit" });
+      for (const neighbor of adj.get(node) || []) {
+        const c = color.get(neighbor);
+        if (c === GRAY) return true;
+        if (c === WHITE) stack.push({ node: neighbor, phase: "enter" });
+      }
     }
-    color[u] = BLACK;
-    return false;
-  }
-
-  for (const n of nodes) {
-    if (color[n] === WHITE && dfs(n)) return true;
   }
   return false;
 }
 
-/**
- * Builds a nested tree object from root using adjacency list.
- */
-function buildTree(root, adjacency) {
+/* ── Tree Builder ────────────────────────────── */
+
+function buildTree(root, adj) {
   const tree = {};
   tree[root] = {};
-  const children = adjacency[root] || [];
-  for (const child of children.sort()) {
-    const subtree = buildTree(child, adjacency);
-    tree[root][child] = subtree[child];
+  for (const child of (adj.get(root) || []).sort()) {
+    const sub = buildTree(child, adj);
+    tree[root][child] = sub[child];
   }
   return tree;
 }
 
-/**
- * Calculates depth = number of nodes on the longest root-to-leaf path.
- */
-function calculateDepth(root, adjacency) {
-  const children = adjacency[root] || [];
-  if (children.length === 0) return 1;
-  let maxChildDepth = 0;
-  for (const child of children) {
-    maxChildDepth = Math.max(maxChildDepth, calculateDepth(child, adjacency));
+/* ── Iterative Depth Calculation ─────────────── */
+
+function calcDepth(root, adj) {
+  let maxDepth = 0;
+  const stack = [{ node: root, depth: 1 }];
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop();
+    const children = adj.get(node) || [];
+    if (children.length === 0) { maxDepth = Math.max(maxDepth, depth); }
+    else { for (const c of children) stack.push({ node: c, depth: depth + 1 }); }
   }
-  return 1 + maxChildDepth;
+  return maxDepth;
 }
 
-/**
- * Finds connected components in an undirected version of the graph.
- */
+/* ── Connected Components (BFS) ──────────────── */
+
 function findComponents(edges) {
   const allNodes = new Set();
-  const undirected = {};
-
+  const undirected = new Map();
   for (const { parent, child } of edges) {
-    allNodes.add(parent);
-    allNodes.add(child);
-    if (!undirected[parent]) undirected[parent] = new Set();
-    if (!undirected[child]) undirected[child] = new Set();
-    undirected[parent].add(child);
-    undirected[child].add(parent);
+    allNodes.add(parent); allNodes.add(child);
+    if (!undirected.has(parent)) undirected.set(parent, new Set());
+    if (!undirected.has(child)) undirected.set(child, new Set());
+    undirected.get(parent).add(child);
+    undirected.get(child).add(parent);
   }
-
   const visited = new Set();
   const components = [];
-
   for (const node of allNodes) {
     if (visited.has(node)) continue;
-    const component = new Set();
-    const stack = [node];
-    while (stack.length > 0) {
-      const current = stack.pop();
-      if (visited.has(current)) continue;
-      visited.add(current);
-      component.add(current);
-      for (const neighbor of undirected[current] || []) {
-        if (!visited.has(neighbor)) stack.push(neighbor);
+    const comp = new Set();
+    const q = [node];
+    while (q.length > 0) {
+      const cur = q.pop();
+      if (visited.has(cur)) continue;
+      visited.add(cur); comp.add(cur);
+      for (const nb of undirected.get(cur) || []) {
+        if (!visited.has(nb)) q.push(nb);
       }
     }
-    components.push(component);
+    components.push(comp);
   }
-
   return components;
 }
 
-// --- Main Processing ---
+/* ── Main Processor ──────────────────────────── */
+
 function processData(data) {
   const invalidEntries = [];
-  const duplicateEdgesSet = new Set();
-  const seenEdges = new Set();
+  const dupSet = new Set();
+  const seen = new Set();
   const validEdges = [];
 
-  // Step 1: Parse and validate each entry
   for (const entry of data) {
-    if (typeof entry !== "string") {
-      invalidEntries.push(String(entry));
+    if (entry === null || entry === undefined || typeof entry !== "string") {
+      invalidEntries.push(String(entry ?? ""));
       continue;
     }
-
     const trimmed = entry.trim();
-
-    // Empty string is invalid
-    if (trimmed === "") {
-      invalidEntries.push(entry);
-      continue;
-    }
-
-    const result = isValidEntry(trimmed);
-
-    if (!result.valid) {
-      invalidEntries.push(trimmed);
-      continue;
-    }
-
-    const edgeKey = `${result.parent}->${result.child}`;
-
-    // Duplicate check
-    if (seenEdges.has(edgeKey)) {
-      duplicateEdgesSet.add(edgeKey);
-      continue;
-    }
-
-    seenEdges.add(edgeKey);
-    validEdges.push({ parent: result.parent, child: result.child });
+    if (trimmed === "") { invalidEntries.push(entry); continue; }
+    const r = isValidEdge(trimmed);
+    if (!r.valid) { invalidEntries.push(r.trimmed); continue; }
+    const key = `${r.parent}->${r.child}`;
+    if (seen.has(key)) { dupSet.add(key); continue; }
+    seen.add(key);
+    validEdges.push({ parent: r.parent, child: r.child });
   }
 
-  // Step 2: Handle diamond / multi-parent case
-  // If a child has more than one parent, only the first-encountered parent edge wins
-  const childParentMap = {};
+  // Multi-parent: first parent wins
+  const childOwner = new Map();
   const finalEdges = [];
-
-  for (const edge of validEdges) {
-    if (childParentMap[edge.child] !== undefined) {
-      // This child already has a parent; silently discard
-      continue;
-    }
-    childParentMap[edge.child] = edge.parent;
-    finalEdges.push(edge);
+  for (const e of validEdges) {
+    if (childOwner.has(e.child)) continue;
+    childOwner.set(e.child, e.parent);
+    finalEdges.push(e);
   }
 
-  // Step 3: Find connected components
   const components = findComponents(finalEdges);
-
-  // Step 4: Build hierarchies
+  const childSet = new Set(finalEdges.map(e => e.child));
   const hierarchies = [];
-  const childSet = new Set(finalEdges.map((e) => e.child));
 
-  for (const component of components) {
-    // Build directed adjacency for this component
-    const adjacency = {};
-    const componentNodes = Array.from(component);
-
-    for (const node of componentNodes) {
-      adjacency[node] = [];
+  for (const comp of components) {
+    const adj = new Map();
+    for (const n of comp) adj.set(n, []);
+    for (const e of finalEdges) {
+      if (comp.has(e.parent) && comp.has(e.child)) adj.get(e.parent).push(e.child);
     }
+    const nodes = Array.from(comp);
+    const cyclic = hasCycle(adj, nodes);
 
-    for (const edge of finalEdges) {
-      if (component.has(edge.parent) && component.has(edge.child)) {
-        adjacency[edge.parent].push(edge.child);
-      }
-    }
-
-    // Detect cycle
-    const cycleDetected = hasCycle(adjacency, componentNodes);
-
-    if (cycleDetected) {
-      // Pure cycle or cycle in component
-      // Find root: node that never appears as child, or lexicographically smallest
-      const roots = componentNodes.filter((n) => !childSet.has(n));
-      let root;
-      if (roots.length > 0) {
-        root = roots.sort()[0];
-      } else {
-        root = componentNodes.sort()[0];
-      }
-
-      hierarchies.push({
-        root,
-        tree: {},
-        has_cycle: true,
-      });
+    if (cyclic) {
+      const roots = nodes.filter(n => !childSet.has(n));
+      const root = roots.length > 0 ? roots.sort()[0] : nodes.sort()[0];
+      // Collect cycle path nodes for frontend display
+      const cycleNodes = nodes.sort();
+      hierarchies.push({ root, tree: {}, has_cycle: true, cycle_nodes: cycleNodes });
     } else {
-      // Valid tree
-      const roots = componentNodes.filter((n) => !childSet.has(n));
-      const root = roots.sort()[0]; // Should always have exactly one root in a tree
-
-      const tree = buildTree(root, adjacency);
-      const depth = calculateDepth(root, adjacency);
-
-      hierarchies.push({
-        root,
-        tree,
-        depth,
-      });
+      const root = nodes.filter(n => !childSet.has(n)).sort()[0];
+      hierarchies.push({ root, tree: buildTree(root, adj), depth: calcDepth(root, adj) });
     }
   }
 
-  // Sort hierarchies: trees first (by root), then cycles (by root)
-  hierarchies.sort((a, b) => {
-    // Maintain order as they were found in input
-    return 0;
-  });
-
-  // Step 5: Build summary
-  const trees = hierarchies.filter((h) => !h.has_cycle);
-  const cycles = hierarchies.filter((h) => h.has_cycle);
-
+  const trees = hierarchies.filter(h => !h.has_cycle);
+  const cycles = hierarchies.filter(h => h.has_cycle);
   let largestTreeRoot = "";
-  if (trees.length > 0) {
-    let maxDepth = 0;
-    for (const t of trees) {
-      if (
-        t.depth > maxDepth ||
-        (t.depth === maxDepth && t.root < largestTreeRoot)
-      ) {
-        maxDepth = t.depth;
-        largestTreeRoot = t.root;
-      }
+  let maxDepth = 0;
+  for (const t of trees) {
+    if (t.depth > maxDepth || (t.depth === maxDepth && t.root < largestTreeRoot)) {
+      maxDepth = t.depth; largestTreeRoot = t.root;
     }
   }
 
   return {
-    user_id: USER_ID,
-    email_id: EMAIL_ID,
-    college_roll_number: COLLEGE_ROLL_NUMBER,
+    user_id: USER_ID, email_id: EMAIL_ID, college_roll_number: COLLEGE_ROLL_NUMBER,
     hierarchies,
     invalid_entries: invalidEntries,
-    duplicate_edges: Array.from(duplicateEdgesSet),
-    summary: {
-      total_trees: trees.length,
-      total_cycles: cycles.length,
-      largest_tree_root: largestTreeRoot,
-    },
+    duplicate_edges: Array.from(dupSet),
+    summary: { total_trees: trees.length, total_cycles: cycles.length, largest_tree_root: largestTreeRoot },
   };
 }
 
-// --- Route Handlers ---
+/* ── Route Handlers ──────────────────────────── */
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
 export async function POST(request) {
   try {
-    const body = await request.json();
+    let body;
+    try { body = await request.json(); }
+    catch { return NextResponse.json({ error: "Invalid JSON body." }, { status: 400, headers: corsHeaders }); }
 
-    if (!body.data || !Array.isArray(body.data)) {
-      return NextResponse.json(
-        { error: "Invalid request: 'data' must be an array of strings." },
-        { status: 400 }
-      );
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Request body must be a JSON object." }, { status: 400, headers: corsHeaders });
+    }
+    if (!("data" in body)) {
+      return NextResponse.json({ error: "Missing required field: 'data'." }, { status: 400, headers: corsHeaders });
+    }
+    if (!Array.isArray(body.data)) {
+      return NextResponse.json({ error: "'data' must be an array of strings." }, { status: 400, headers: corsHeaders });
     }
 
     const result = processData(body.data);
-
-    return NextResponse.json(result, {
-      status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    });
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Internal server error: " + error.message },
-      { status: 500 }
-    );
+    return NextResponse.json(result, { status: 200, headers: corsHeaders });
+  } catch (err) {
+    return NextResponse.json({ error: "Internal server error: " + err.message }, { status: 500, headers: corsHeaders });
   }
 }
 
 export async function GET() {
   return NextResponse.json(
-    { operation_code: 1 },
-    {
-      status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-      },
-    }
+    { operation_code: 1, user_id: USER_ID },
+    { status: 200, headers: corsHeaders }
   );
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
-  });
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
 }
