@@ -1,15 +1,20 @@
 "use client";
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { 
+  Sun, Moon, Zap, Search, GitMerge, RefreshCw, AlertTriangle, 
+  CheckCircle, Copy, Download, ChevronDown, ChevronRight, Code, 
+  ListTree, Network, Braces, AlertCircle, Shuffle, Check
+} from "lucide-react";
 
 /* In production (Vercel), point to Render backend. In dev, use local Next.js API route. */
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api/bfhl";
 
 /* ── Presets ──────────────────────────────────── */
 const PRESETS = {
-  mixed: { label: "🔀 Mixed", data: "A->B, A->C, B->D, C->E, E->F, X->Y, Y->Z, Z->X, P->Q, Q->R, G->H, G->H, G->I, hello, 1->2, A->" },
-  trees: { label: "🌲 Trees Only", data: "A->B, A->C, B->D, C->E, P->Q, Q->R, G->H, G->I" },
-  cycles: { label: "🔁 Cycles Only", data: "X->Y, Y->Z, Z->X, M->N, N->O, O->M" },
-  edge: { label: "⚡ Edge Cases", data: "hello, 1->2, A->, AB->C, A-B, A->A, , A->B,  A->B " },
+  mixed: { label: "Mixed", icon: Shuffle, data: "A->B, A->C, B->D, C->E, E->F, X->Y, Y->Z, Z->X, P->Q, Q->R, G->H, G->H, G->I, hello, 1->2, A->" },
+  trees: { label: "Trees Only", icon: ListTree, data: "A->B, A->C, B->D, C->E, P->Q, Q->R, G->H, G->I" },
+  cycles: { label: "Cycles Only", icon: RefreshCw, data: "X->Y, Y->Z, Z->X, M->N, N->O, O->M" },
+  edge: { label: "Edge Cases", icon: Zap, data: "hello, 1->2, A->, AB->C, A-B, A->A, , A->B,  A->B " },
 };
 
 /* ── Helpers ──────────────────────────────────── */
@@ -77,16 +82,17 @@ function GraphViz({ hierarchy }) {
   const g = hierarchy.has_cycle
     ? computeCycleGraph(hierarchy.cycle_nodes)
     : computeTreeGraph(hierarchy.tree);
-  if (!g) return <div className="cycle-indicator"><span className="cycle-icon">⟳</span>Cycle detected</div>;
+  if (!g) return <div className="cycle-indicator"><RefreshCw size={32} className="cycle-icon" />Cycle detected</div>;
   const { nodes, edges, w, h } = g;
   const markerId = hierarchy.has_cycle ? "arrow-cycle" : "arrow-tree";
-  const strokeColor = hierarchy.has_cycle ? "var(--error)" : "var(--text-muted)";
+  const strokeColor = hierarchy.has_cycle ? "var(--error)" : "var(--accent-light)";
+  
   return (
     <div className="graph-container">
       <svg width={Math.max(w, 160)} height={Math.max(h, 100)} viewBox={`0 0 ${Math.max(w, 160)} ${Math.max(h, 100)}`}>
         <defs>
           <marker id={markerId} markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-            <path d="M0,0 L8,3 L0,6" fill={strokeColor} opacity="0.6" />
+            <path d="M0,0 L8,3 L0,6" fill={strokeColor} opacity="0.8" />
           </marker>
         </defs>
         {edges.map((e, i) => {
@@ -218,20 +224,27 @@ export default function Home() {
   const loadPreset = (key) => { setInput(PRESETS[key].data); setResult(null); setError(""); };
 
   const TABS = [
-    { id: "hierarchies", label: "🌲 Hierarchies", count: result?.hierarchies?.length },
-    { id: "invalid", label: "❌ Invalid", count: result?.invalid_entries?.length },
-    { id: "duplicates", label: "🔁 Duplicates", count: result?.duplicate_edges?.length },
-    { id: "json", label: "{ } JSON" },
+    { id: "hierarchies", label: "Hierarchies", icon: Network, count: result?.hierarchies?.length },
+    { id: "invalid", label: "Invalid", icon: AlertCircle, count: result?.invalid_entries?.length },
+    { id: "duplicates", label: "Duplicates", icon: Copy, count: result?.duplicate_edges?.length },
+    { id: "json", label: "JSON", icon: Braces },
   ];
 
   return (
     <>
+      <div className="ambient-background">
+        <div className="blob blob-1"></div>
+        <div className="blob blob-2"></div>
+      </div>
+
       <div className="topbar">
-        <button className="theme-toggle" onClick={toggleTheme} id="theme-toggle">{theme === "dark" ? "☀️" : "🌙"}</button>
+        <button className="theme-toggle" onClick={toggleTheme} id="theme-toggle" aria-label="Toggle theme">
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
       </div>
 
       <header className="hero">
-        <div className="hero-badge">⚡ SRM Full Stack Challenge</div>
+        <div className="hero-badge"><Zap size={14} className="text-accent" /> SRM Full Stack Challenge</div>
         <h1>Hierarchy Visualizer</h1>
         <p>Parse node relationships, detect cycles, build trees, and visualize hierarchical structures in real time.</p>
         <div className="kbd-hint">Press <span className="kbd">Ctrl</span> + <span className="kbd">Enter</span> to submit</div>
@@ -257,25 +270,29 @@ export default function Home() {
 
           <div className="btn-row">
             <button id="submit-btn" className="btn btn-primary" onClick={handleSubmit} disabled={loading}>
-              {loading ? <><span className="spinner" /> Processing…</> : <>🔍 Analyze</>}
+              {loading ? <><span className="spinner" /> Processing…</> : <><Search size={16} /> Analyze</>}
             </button>
             {Object.entries(PRESETS).map(([key, p]) => (
-              <button key={key} className="btn btn-secondary btn-sm" onClick={() => loadPreset(key)}>{p.label}</button>
+              <button key={key} className="btn btn-secondary btn-sm" onClick={() => loadPreset(key)}>
+                <p.icon size={14} /> {p.label}
+              </button>
             ))}
           </div>
 
           {input.trim() && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 16 }}>
               <button className="btn btn-secondary btn-sm" onClick={() => setShowPreview(!showPreview)}>
-                {showPreview ? "▾ Hide" : "▸ Show"} Request Preview
+                {showPreview ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Request Preview
               </button>
               {showPreview && requestPreview && (
-                <pre className="json-block" style={{ marginTop: 8, maxHeight: 160 }}>{JSON.stringify(requestPreview, null, 2)}</pre>
+                <div className="json-block-wrapper">
+                  <pre className="json-block">{JSON.stringify(requestPreview, null, 2)}</pre>
+                </div>
               )}
             </div>
           )}
 
-          {error && <div className="error-banner" id="error-message">⚠️ {error}</div>}
+          {error && <div className="error-banner" id="error-message"><AlertTriangle size={16} /> {error}</div>}
         </section>
 
         {result && (
@@ -283,29 +300,32 @@ export default function Home() {
             <div className="results-header">
               <h2>Results</h2>
               <div className="results-meta">
-                <span className="badge badge-success">✓ Success</span>
+                <span className="badge badge-success"><CheckCircle size={12} /> Success</span>
                 {responseTime !== null && <span className="badge badge-time">{responseTime}ms</span>}
               </div>
             </div>
 
-            <div className="info-grid">
-              <div className="info-item"><div className="label">User ID</div><div className="value">{result.user_id}</div></div>
-              <div className="info-item"><div className="label">Email</div><div className="value">{result.email_id}</div></div>
-              <div className="info-item"><div className="label">Roll Number</div><div className="value">{result.college_roll_number}</div></div>
-            </div>
-
             <div className="summary-grid">
               <div className="stat-card stat-trees" style={{ animationDelay: "0s" }}>
-                <div className="stat-value"><AnimatedNum value={result.summary.total_trees} /></div>
-                <div className="stat-label">Valid Trees</div>
+                <div className="stat-icon-wrap bg-success"><ListTree size={20} /></div>
+                <div>
+                  <div className="stat-value"><AnimatedNum value={result.summary.total_trees} /></div>
+                  <div className="stat-label">Valid Trees</div>
+                </div>
               </div>
               <div className="stat-card stat-cycles" style={{ animationDelay: "0.1s" }}>
-                <div className="stat-value"><AnimatedNum value={result.summary.total_cycles} /></div>
-                <div className="stat-label">Cycles</div>
+                <div className="stat-icon-wrap bg-error"><RefreshCw size={20} /></div>
+                <div>
+                  <div className="stat-value"><AnimatedNum value={result.summary.total_cycles} /></div>
+                  <div className="stat-label">Cycles</div>
+                </div>
               </div>
               <div className="stat-card stat-root" style={{ animationDelay: "0.2s" }}>
-                <div className="stat-value">{result.summary.largest_tree_root || "—"}</div>
-                <div className="stat-label">Largest Root</div>
+                <div className="stat-icon-wrap bg-accent"><GitMerge size={20} /></div>
+                <div>
+                  <div className="stat-value">{result.summary.largest_tree_root || "—"}</div>
+                  <div className="stat-label">Largest Root</div>
+                </div>
               </div>
             </div>
 
@@ -313,7 +333,8 @@ export default function Home() {
             <div className="tabs">
               {TABS.map(t => (
                 <button key={t.id} className={`tab ${activeTab === t.id ? "active" : ""}`} onClick={() => setActiveTab(t.id)}>
-                  {t.label}{t.count !== undefined && <span className="tab-count">{t.count}</span>}
+                  <t.icon size={16} /> {t.label}
+                  {t.count !== undefined && <span className="tab-count">{t.count}</span>}
                 </button>
               ))}
             </div>
@@ -322,8 +343,8 @@ export default function Home() {
             {activeTab === "hierarchies" && (
               <div className="tab-content">
                 <div className="viz-toggle">
-                  <button className={vizMode === "graph" ? "active" : ""} onClick={() => setVizMode("graph")}>◉ Graph</button>
-                  <button className={vizMode === "text" ? "active" : ""} onClick={() => setVizMode("text")}>≡ Text</button>
+                  <button className={vizMode === "graph" ? "active" : ""} onClick={() => setVizMode("graph")}><Network size={14} /> Graph</button>
+                  <button className={vizMode === "text" ? "active" : ""} onClick={() => setVizMode("text")}><Code size={14} /> Text</button>
                 </div>
                 {result.hierarchies.map((h, i) => (
                   <div className="hierarchy-card" key={i} id={`hierarchy-${i}`} style={{ animationDelay: `${i * 0.1}s` }}>
@@ -334,16 +355,16 @@ export default function Home() {
                       </div>
                       <div className="hierarchy-meta">
                         {h.has_cycle
-                          ? <><span className="meta-badge cycle-badge">⟳ Cycle</span>
-                              {h.cycle_nodes && <span className="meta-badge cycle-badge" style={{ opacity: 0.7 }}>{h.cycle_nodes.join(" → ")} → {h.cycle_nodes[0]}</span>}</>
-                          : <><span className="meta-badge tree-badge">✓ Tree</span><span className="meta-badge depth-badge">Depth: {h.depth}</span></>
+                          ? <><span className="meta-badge cycle-badge"><RefreshCw size={12} /> Cycle</span>
+                              {h.cycle_nodes && <span className="meta-badge cycle-badge" style={{ opacity: 0.8 }}>{h.cycle_nodes.join(" → ")} → {h.cycle_nodes[0]}</span>}</>
+                          : <><span className="meta-badge tree-badge"><CheckCircle size={12} /> Tree</span><span className="meta-badge depth-badge">Depth: {h.depth}</span></>
                         }
                       </div>
                     </div>
                     {vizMode === "graph"
                       ? <GraphViz hierarchy={h} />
                       : h.has_cycle
-                        ? <div className="cycle-indicator"><span className="cycle-icon">⟳</span>Cycle detected — {h.cycle_nodes?.join(" → ")} → {h.cycle_nodes?.[0]}</div>
+                        ? <div className="cycle-indicator"><RefreshCw size={32} className="cycle-icon" />Cycle detected — {h.cycle_nodes?.join(" → ")} → {h.cycle_nodes?.[0]}</div>
                         : Object.keys(h.tree).length > 0 && <TreeText tree={h.tree} />
                     }
                   </div>
@@ -355,7 +376,7 @@ export default function Home() {
             {activeTab === "invalid" && (
               <div className="tab-content">
                 {result.invalid_entries.length === 0
-                  ? <div className="empty-state">✅ No invalid entries found</div>
+                  ? <div className="empty-state"><CheckCircle size={24} className="mb-2 text-success" /> No invalid entries found</div>
                   : <div className="tags-wrap">{result.invalid_entries.map((e, i) => <span className="tag tag-invalid" key={i}>{e || '""'}</span>)}</div>
                 }
               </div>
@@ -365,7 +386,7 @@ export default function Home() {
             {activeTab === "duplicates" && (
               <div className="tab-content">
                 {result.duplicate_edges.length === 0
-                  ? <div className="empty-state">✅ No duplicate edges found</div>
+                  ? <div className="empty-state"><CheckCircle size={24} className="mb-2 text-success" /> No duplicate edges found</div>
                   : <div className="tags-wrap">{result.duplicate_edges.map((e, i) => <span className="tag tag-duplicate" key={i}>{e}</span>)}</div>
                 }
               </div>
@@ -375,10 +396,12 @@ export default function Home() {
             {activeTab === "json" && (
               <div className="tab-content">
                 <div className="json-bar">
-                  <button className="btn btn-secondary btn-sm" onClick={copyJson}>📋 Copy</button>
-                  <button className="btn btn-secondary btn-sm" onClick={downloadJson}>⬇ Download</button>
+                  <button className="btn btn-secondary btn-sm" onClick={copyJson}><Copy size={14} /> Copy</button>
+                  <button className="btn btn-secondary btn-sm" onClick={downloadJson}><Download size={14} /> Download</button>
                 </div>
-                <pre className="json-block">{JSON.stringify(result, null, 2)}</pre>
+                <div className="json-block-wrapper">
+                  <pre className="json-block">{JSON.stringify(result, null, 2)}</pre>
+                </div>
               </div>
             )}
           </section>
@@ -386,7 +409,7 @@ export default function Home() {
       </main>
 
       <footer className="footer">BFHL Hierarchy Visualizer — SRM Full Stack Engineering Challenge</footer>
-      {copied && <div className="toast">✓ Copied to clipboard</div>}
+      {copied && <div className="toast"><Check size={16} /> Copied to clipboard</div>}
     </>
   );
 }
