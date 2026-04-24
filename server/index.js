@@ -1,19 +1,12 @@
 const express = require("express");
 const cors = require("cors");
-
 const app = express();
 const PORT = process.env.PORT || 3001;
-
 const USER_ID = "RohanSinghAswal_04052004";
 const EMAIL_ID = "rs9951@srmist.edu.in";
 const COLLEGE_ROLL_NUMBER = "RA2311003020088";
-
-// --- Middleware ---
 app.use(cors());
 app.use(express.json());
-
-// --- Helpers ---
-
 function isValidEdge(entry) {
   const t = typeof entry === "string" ? entry.trim() : "";
   if (!t) return { valid: false, trimmed: t };
@@ -21,7 +14,6 @@ function isValidEdge(entry) {
   if (!m || m[1] === m[2]) return { valid: false, trimmed: t };
   return { valid: true, parent: m[1], child: m[2], trimmed: t };
 }
-
 function hasCycle(adj, nodes) {
   const WHITE = 0, GRAY = 1, BLACK = 2;
   const color = new Map();
@@ -45,7 +37,6 @@ function hasCycle(adj, nodes) {
   }
   return false;
 }
-
 function buildTree(root, adj) {
   const tree = {};
   tree[root] = {};
@@ -55,7 +46,6 @@ function buildTree(root, adj) {
   }
   return tree;
 }
-
 function calcDepth(root, adj) {
   let maxDepth = 0;
   const stack = [{ node: root, depth: 1 }];
@@ -67,7 +57,6 @@ function calcDepth(root, adj) {
   }
   return maxDepth;
 }
-
 function findComponents(edges) {
   const allNodes = new Set();
   const undirected = new Map();
@@ -96,13 +85,11 @@ function findComponents(edges) {
   }
   return components;
 }
-
 function processData(data) {
   const invalidEntries = [];
   const dupSet = new Set();
   const seen = new Set();
   const validEdges = [];
-
   for (const entry of data) {
     if (entry === null || entry === undefined || typeof entry !== "string") {
       invalidEntries.push(String(entry ?? ""));
@@ -117,7 +104,6 @@ function processData(data) {
     seen.add(key);
     validEdges.push({ parent: r.parent, child: r.child });
   }
-
   const childOwner = new Map();
   const finalEdges = [];
   for (const e of validEdges) {
@@ -125,11 +111,9 @@ function processData(data) {
     childOwner.set(e.child, e.parent);
     finalEdges.push(e);
   }
-
   const components = findComponents(finalEdges);
   const childSet = new Set(finalEdges.map(e => e.child));
   const hierarchies = [];
-
   for (const comp of components) {
     const adj = new Map();
     for (const n of comp) adj.set(n, []);
@@ -138,7 +122,6 @@ function processData(data) {
     }
     const nodes = Array.from(comp);
     const cyclic = hasCycle(adj, nodes);
-
     if (cyclic) {
       const roots = nodes.filter(n => !childSet.has(n));
       const root = roots.length > 0 ? roots.sort()[0] : nodes.sort()[0];
@@ -148,7 +131,6 @@ function processData(data) {
       hierarchies.push({ root, tree: buildTree(root, adj), depth: calcDepth(root, adj) });
     }
   }
-
   const trees = hierarchies.filter(h => !h.has_cycle);
   let largestTreeRoot = "";
   let maxDepth = 0;
@@ -157,7 +139,6 @@ function processData(data) {
       maxDepth = t.depth; largestTreeRoot = t.root;
     }
   }
-
   return {
     user_id: USER_ID, email_id: EMAIL_ID, college_roll_number: COLLEGE_ROLL_NUMBER,
     hierarchies,
@@ -170,17 +151,12 @@ function processData(data) {
     },
   };
 }
-
-// --- Routes ---
-
 app.get("/bfhl", (req, res) => {
   res.json({ operation_code: 1, user_id: USER_ID });
 });
-
 app.post("/bfhl", (req, res) => {
   try {
     const { data } = req.body || {};
-
     if (!req.body || typeof req.body !== "object") {
       return res.status(400).json({ error: "Request body must be a JSON object." });
     }
@@ -190,19 +166,15 @@ app.post("/bfhl", (req, res) => {
     if (!Array.isArray(data)) {
       return res.status(400).json({ error: "'data' must be an array of strings." });
     }
-
     const result = processData(data);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: "Internal server error: " + err.message });
   }
 });
-
-// Health check
 app.get("/", (req, res) => {
   res.json({ status: "ok", service: "bfhl-api" });
 });
-
 app.listen(PORT, () => {
   console.log(`BFHL API server running on port ${PORT}`);
 });
