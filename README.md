@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hierarchy Visualizer
+
+A full-stack web application designed to parse, validate, and visualize directed acyclic graphs (Trees) and cyclic graphs (Cycles) from an array of node relationships (e.g., `A->B`, `C->D`). 
+
+Built for the **Bajaj Finserv Health Dev Challenge (SRM Full Stack Engineering)**.
+
+## Architecture
+
+The project employs a split-deployment architecture for production robustness:
+
+- **Frontend:** Built with **Next.js 14**, React, and CSS. Deployed on **Vercel**.
+- **Backend:** Built with **Node.js** and **Express**. Deployed on **Render**.
+
+### Key Features
+- **Algorithm:** Uses iterative Depth First Search (DFS) for high-performance cycle detection, scaling without recursion stack overflow issues.
+- **Visualizations:** Renders exact node mappings dynamically using SVG graph rendering directly in the DOM.
+- **Robustness:** Strict `400 Bad Request` schema enforcement for malformed node requests.
+- **Native Design:** A highly professional, solid-color structural SaaS design schema.
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js v18+
+- npm or yarn
+
+### Installation
+Clone the repository, then install dependencies for both the frontend and the standalone backend.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Install frontend dependencies
+npm install
+
+# Install backend dependencies
+cd server
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Running Locally
+To run the full stack locally, start both the Next.js development server and the Express backend.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+```bash
+# In the root directory (Frontend on port 3000)
+npm run dev
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# In a new terminal, run the backend (Backend on port 3001)
+cd server
+node index.js
+```
 
-## Learn More
+### Environment Variables
+For production deployment, ensure the Vercel frontend is pointing to the Render backend by setting the API URL.
 
-To learn more about Next.js, take a look at the following resources:
+**.env.production (Frontend)**
+```env
+NEXT_PUBLIC_API_URL=https://bfhl-api-ibc9.onrender.com/bfhl
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API Specifications
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### `POST /bfhl`
+Processes the incoming node relations and returns trees, cycles, and invalid configurations.
+- **Request Body:** `{ "data": ["A->B", "X->Y"] }`
+- **Response Structure:** Includes User Identity, Valid Hierarchies, Invalid Entries, Duplicate Edges, and a Statistical Summary.
 
-## Deploy on Vercel
+### `GET /bfhl`
+Returns a strict `{ "operation_code": 1 }` to prove API liveness.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Author
+Rohan Singh Aswal
