@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-const USER_ID = "rohan_24042004";
-const EMAIL_ID = "rp2aborz@srmap.edu.in";
-const COLLEGE_ROLL_NUMBER = "AP22110011406";
+const USER_ID = "RohanSinghAswal_04052004";
+const EMAIL_ID = "rs9951@srmist.edu.in";
+const COLLEGE_ROLL_NUMBER = "RA2311003020088";
 
 /* ── Validation ──────────────────────────────── */
 

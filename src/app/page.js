@@ -232,11 +232,6 @@ export default function Home() {
 
   return (
     <>
-      <div className="ambient-background">
-        <div className="blob blob-1"></div>
-        <div className="blob blob-2"></div>
-      </div>
-
       <div className="topbar">
         <button className="theme-toggle" onClick={toggleTheme} id="theme-toggle" aria-label="Toggle theme">
           {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
@@ -244,7 +239,6 @@ export default function Home() {
       </div>
 
       <header className="hero">
-        <div className="hero-badge"><Zap size={14} className="text-accent" /> SRM Full Stack Challenge</div>
         <h1>Hierarchy Visualizer</h1>
         <p>Parse node relationships, detect cycles, build trees, and visualize hierarchical structures in real time.</p>
         <div className="kbd-hint">Press <span className="kbd">Ctrl</span> + <span className="kbd">Enter</span> to submit</div>
@@ -404,11 +398,17 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            <div className="user-meta">
+              <div className="um-item"><span className="um-label">User ID</span><span className="um-value">{result.user_id}</span></div>
+              <div className="um-item"><span className="um-label">Email</span><span className="um-value">{result.email_id}</span></div>
+              <div className="um-item"><span className="um-label">Roll Number</span><span className="um-value">{result.college_roll_number}</span></div>
+            </div>
           </section>
         )}
       </main>
 
-      <footer className="footer">BFHL Hierarchy Visualizer — SRM Full Stack Engineering Challenge</footer>
+      <footer className="footer">Hierarchy Visualizer</footer>
       {copied && <div className="toast"><Check size={16} /> Copied to clipboard</div>}
     </>
   );
