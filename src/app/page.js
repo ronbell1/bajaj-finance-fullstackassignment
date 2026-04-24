@@ -1,6 +1,9 @@
 "use client";
 import { useState, useCallback, useEffect, useMemo } from "react";
 
+/* In production (Vercel), point to Render backend. In dev, use local Next.js API route. */
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "/api/bfhl";
+
 /* ── Presets ──────────────────────────────────── */
 const PRESETS = {
   mixed: { label: "🔀 Mixed", data: "A->B, A->C, B->D, C->E, E->F, X->Y, Y->Z, Z->X, P->Q, Q->R, G->H, G->H, G->I, hello, 1->2, A->" },
@@ -195,7 +198,7 @@ export default function Home() {
     setLoading(true);
     const t0 = performance.now();
     try {
-      const res = await fetch("/api/bfhl", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
+      const res = await fetch(API_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
       setResponseTime(Math.round(performance.now() - t0));
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || `Status ${res.status}`); }
       setResult(await res.json());

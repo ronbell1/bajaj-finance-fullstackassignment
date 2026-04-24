@@ -1,0 +1,16 @@
+{
+  "name": "bfhl-api",
+  "version": "1.0.0",
+  "description": "BFHL Hierarchy API for Render deployment",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
