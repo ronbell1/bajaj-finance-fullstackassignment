@@ -95,6 +95,29 @@ body {
   border: 1px solid var(--border); font-family: 'Inter', sans-serif; 
   font-size: 0.75rem; font-weight: 500; color: var(--text-primary);
 }
+.backend-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 12px; padding: 4px 12px; border-radius: 20px;
+  font-size: 0.75rem; font-weight: 500;
+  transition: all 0.3s ease;
+}
+.backend-status.waking {
+  color: var(--text-muted); background: var(--bg-secondary);
+  border: 1px solid var(--border);
+}
+.backend-status.waking .spinner {
+  width: 12px; height: 12px;
+  border: 1.5px solid var(--border); border-top-color: var(--text-muted);
+  border-radius: 50%; animation: spin 0.6s linear infinite;
+}
+.backend-status.ready {
+  color: var(--success); background: var(--success-bg);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+.backend-status.error {
+  color: var(--error); background: var(--error-bg);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
 .container { max-width: 800px; margin: 0 auto; padding: 0 20px 60px; }
 .card {
   background: var(--bg-card); border: 1px solid var(--border);

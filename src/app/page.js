@@ -158,6 +158,30 @@ export default function Home() {
   const [theme, setTheme] = useState("dark");
   const [activeTab, setActiveTab] = useState("hierarchies");
   const [showPreview, setShowPreview] = useState(false);
+  const [backendStatus, setBackendStatus] = useState("waking"); // "waking" | "ready" | "error"
+
+  // Warm up the Render backend on page load to avoid cold start delay
+  useEffect(() => {
+    const BASE_URL = API_URL.replace(/\/bfhl$/, "");
+    const warmUp = async () => {
+      try {
+        await fetch(`${BASE_URL}/bfhl`, { method: "GET" });
+        setBackendStatus("ready");
+      } catch {
+        // Retry once after 3s if initial ping fails
+        setTimeout(async () => {
+          try {
+            await fetch(`${BASE_URL}/bfhl`, { method: "GET" });
+            setBackendStatus("ready");
+          } catch {
+            setBackendStatus("error");
+          }
+        }, 3000);
+      }
+    };
+    warmUp();
+  }, []);
+
   useEffect(() => {
     const s = localStorage.getItem("bfhl-theme");
     if (s) { setTheme(s); document.documentElement.setAttribute("data-theme", s); }
@@ -215,6 +239,11 @@ export default function Home() {
         <h1>Hierarchy Visualizer</h1>
         <p>Parse node relationships, detect cycles, build trees, and visualize hierarchical structures in real time.</p>
         <div className="kbd-hint">Press <span className="kbd">Ctrl</span> + <span className="kbd">Enter</span> to submit</div>
+        <div className={`backend-status ${backendStatus}`}>
+          {backendStatus === "waking" && <><span className="spinner" /> Waking up backend…</>}
+          {backendStatus === "ready" && <><CheckCircle size={14} /> Backend ready</>}
+          {backendStatus === "error" && <><AlertTriangle size={14} /> Backend unreachable</>}
+        </div>
       </header>
       <main className="container">
         <section className="card input-section" id="input-section">
