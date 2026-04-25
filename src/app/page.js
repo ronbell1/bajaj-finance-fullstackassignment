@@ -161,18 +161,21 @@ export default function Home() {
   const [backendStatus, setBackendStatus] = useState("waking"); // "waking" | "ready" | "error"
 
   // Warm up the Render backend on page load to avoid cold start delay
+  // Always ping the Render URL directly, not the Next.js API route
+  const RENDER_BACKEND = "https://bfhl-api-ibc9.onrender.com";
   useEffect(() => {
-    const BASE_URL = API_URL.replace(/\/bfhl$/, "");
     const warmUp = async () => {
       try {
-        await fetch(`${BASE_URL}/bfhl`, { method: "GET" });
-        setBackendStatus("ready");
+        const res = await fetch(`${RENDER_BACKEND}/bfhl`, { method: "GET" });
+        if (res.ok) setBackendStatus("ready");
+        else throw new Error("not ok");
       } catch {
         // Retry once after 3s if initial ping fails
         setTimeout(async () => {
           try {
-            await fetch(`${BASE_URL}/bfhl`, { method: "GET" });
-            setBackendStatus("ready");
+            const res = await fetch(`${RENDER_BACKEND}/bfhl`, { method: "GET" });
+            if (res.ok) setBackendStatus("ready");
+            else setBackendStatus("error");
           } catch {
             setBackendStatus("error");
           }
